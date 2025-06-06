@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1, minimum-scale=1, shrink-to-fit=no, user-scalable=no">
+    <link rel="stylesheet" href="/static/css/style_backup_record.css">
+    <title>監視カメラシステム</title>
+</head>
+<body>
+    <div class="layout-record">
+        <header><h1>監視カメラシステム</h1></header>
+        <nav>
+            <ul>
+                <li><a href="/system/cam/">Top</a></li>
+                <li><a href="/system/cam/record/">録画データ</a></li>
+                <li><a href="/system/cam/backup/">バックアップ録画一覧</a></li>
+            </ul>
+        </nav>
+        
+        <!-- フィルタリングコントロール追加 -->
+        <div class="filter-controls">
+            <input type="text" id="search-input" placeholder="ファイル名で検索..." class="search-box">
+            <select id="camera-filter" class="filter-select">
+                <option value="all">すべてのカメラ</option>
+                {% for camera_id, files in recordings.items() %}
+                    <option value="{{ camera_id }}">{{ camera_names.get(camera_id, 'カメラ ' + camera_id) }}</option>
+                {% endfor %}
+            </select>
+            <button id="refresh-btn" class="refresh-button">更新</button>
+        </div>
+        
+        <div class="recordings-flex">
+            {% if not recordings %}
+                <div class="no-recordings-message">バックアップフォルダにカメラの録画ファイルが見つかりません。</div>
+            {% endif %}
+            
+            {% for camera_id, files in recordings.items() %}
+                <div class="camera-section" data-camera-id="{{ camera_id }}">
+                    <div class="camera-header">
+                        <h2>{{ camera_names.get(camera_id, 'カメラ ' + camera_id) }}</h2>
+                        <div class="file-count">{{ files|length }}ファイル</div>
+                    </div>
+                    
+                    {% if files %}
+                        <table class="recordings-table">
+                            <thead>
+                                <tr>
+                                    <th>ファイル名</th>
+                                    <th>録画日時</th>
+                                    <th>サイズ</th>
+                                    <th>状態</th>
+                                    <th>アクション</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for file in files %}
+                                    <tr class="recording-item" data-filename="{{ file.filename }}">
+                                        <td class="filename-cell">{{ file.filename }}</td>
+                                        <td class="date-cell">{{ file.date.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                        <td class="size-cell">{{ '{:.1f}'.format(file.size / 1024 / 1024) }} MB</td>
+                                        <td class="status-cell file-status" data-path="/system/cam/backup/{{ camera_id }}/{{ file.filename }}">確認中...</td>
+                                        <td class="action-cell">
+                                            <a href="/system/cam/backup/{{ camera_id }}/{{ file.filename }}" 
+                                               class="play-btn" 
+                                               target="_blank" 
+                                               title="新しいウィンドウで再生">再生</a>
+                                            <button class="download-btn" 
+                                                    data-path="/system/cam/backup/{{ camera_id }}/{{ file.filename }}" 
+                                                    title="ダウンロード">保存</button>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <p class="no-recordings">録画ファイルが見つかりません</p>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        <footer>&nbsp;&nbsp;Copyright&copy;&nbsp;&nbsp;2024&nbsp;&nbsp;株式会社&nbsp;共立電機製作所&nbsp;&nbsp;All&nbsp;rights&nbsp;reserved.</footer>
+    </div>
+    
+    <script src="/static/js/backup_recordings.js"></script>
+</body>
+</html>

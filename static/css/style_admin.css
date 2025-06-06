@@ -1,0 +1,360 @@
+@charset "utf-8";
+
+html, body {
+    height: 100%;
+}
+
+body {
+    margin: 0 auto;
+    padding: 0 auto;
+    font-family: "ヒラギノ角ゴ Pro W3", "Hiragino Kaku Gothic Pro", "メイリオ", Meiryo, Osaka, "ＭＳ Ｐゴシック", "MS PGothic", sans-serif;  /*フォント種類*/
+    background-color: #ffffff;
+}
+
+.layout {
+    display: grid;
+    grid-template-rows: 55px 25px auto auto 1fr 25px;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+header {
+    grid-row: 1;
+    grid-column: 1 / 7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 170%;  /* 文字サイズ */
+    color: #ffffff;
+    background-color: #4169e1;
+}
+
+footer {
+    grid-row: 6;
+    grid-column: 1 / 7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 70%;  /* 文字サイズ */
+    color: #ffffff;
+    background-color: #4169e1;
+}
+
+/* navigation */
+nav {
+    grid-row: 2;
+    grid-column: 1 / 7;
+    background-color: dimgray;
+    text-align: left;
+    padding-top: 0px;
+    box-sizing: border-box;
+}
+ul {
+    display: block;
+    overflow: hidden;
+    list-style: none;
+    margin: 0 auto;
+}
+ul li {
+    display: inline-block;
+}
+ul li:hover {
+    -webkit-transform-origin: left top;
+    -ms-transform-origin: left top;
+    transform-origin: left top;
+    -webkit-transform: scale(1, 1);
+    -ms-transform: scale(1, 1);
+    transform: scale(1, 1)
+}
+a {
+    display: block;
+    align-items: center;
+    justify-content: center;
+    text-wrap: nowrap;
+    text-decoration: none;
+    color: white;
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
+/* live streaming */
+.controls {
+    grid-row: 3;
+    grid-column: 1 / 7;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px; /* ボタン間のスペース */
+    padding: 15px;
+    margin-bottom: 5px;
+    background-color: #f0f0f0;
+    border-bottom: 1px solid #ddd;
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    background-color: #fff;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+    min-width: 250px;
+}
+
+.control-group h3 {
+    margin: 0 0 10px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+    font-size: 1.1em;
+    color: #333;
+}
+
+.control-group button { 
+    margin: 5px; 
+    padding: 8px 15px; 
+    background-color: #0066cc; 
+    color: white; 
+    border: none; 
+    border-radius: 4px; 
+    cursor: pointer; 
+}
+
+.control-group button:hover { 
+    background-color: #0052a3; 
+}
+
+.msg {
+    grid-row: 4;
+    grid-column: 1 / 7;
+    padding: 15px;
+    margin: 5px;
+    font-size: 1.1em;
+    color: #333;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+    border: 1px solid #eee;
+    white-space: pre-line;
+}
+
+.system-status {
+    grid-row: 5;
+    grid-column: 1 / 7;
+    padding: 15px;
+    margin: 5px;
+    overflow-y: auto;
+}
+
+.system-status h3 {
+    margin: 10px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+    color: #333;
+}
+
+/* カメラ状態グリッド */
+.camera-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.camera-status {
+    padding: 15px;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+    background-color: #fff;
+}
+
+.camera-status h4 {
+    margin: 0 0 10px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+    font-size: 1.1em;
+}
+
+.status-info {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.status-label {
+    font-weight: bold;
+    color: #666;
+}
+
+.camera-controls {
+    display: flex;
+    justify-content: center;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+
+/* ディスク容量グリッド */
+.disk-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.disk-status {
+    padding: 15px;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+    background-color: #fff;
+}
+
+.disk-path {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+/* 状態表示の色分け */
+.status-ok {
+    border-left: 5px solid #4CAF50;
+}
+
+.status-warning {
+    border-left: 5px solid #FFC107;
+}
+
+.status-error {
+    border-left: 5px solid #F44336;
+}
+
+.status-unknown {
+    border-left: 5px solid #9E9E9E;
+}
+
+.status-value.status-ok {
+    color: #4CAF50;
+    border-left: none;
+    font-weight: bold;
+}
+
+.status-value.status-warning {
+    color: #FFC107;
+    border-left: none;
+    font-weight: bold;
+}
+
+.status-value.status-error {
+    color: #F44336;
+    border-left: none;
+    font-weight: bold;
+}
+
+.update-time {
+    color: #666;
+    font-size: 0.9em;
+    text-align: right;
+    margin-top: 20px;
+    font-style: italic;
+}
+
+button:hover {
+    background-color: #666;
+}
+
+h1, h2, h3, h4, h5, p, ul, ol, li, dl, dt, dd, form, figure, form { margin: 0px; padding: 0px; font-size: 100%; font-weight: normal; }
+
+img { border: none; max-width: 100%; width: auto; height: auto; vertical-align: middle; }
+
+iframe { width: 100%; }
+
+/* admin.html から移行したスタイル */
+.status { 
+    margin: 20px 0; 
+    padding: 15px; 
+    background-color: #f8f8f8; 
+    border-radius: 5px; 
+}
+
+.camera-list { 
+    margin-top: 20px; 
+}
+
+.camera-item { 
+    margin-bottom: 10px; 
+    padding: 10px; 
+    background-color: #f0f0f0; 
+    border-radius: 5px; 
+}
+
+.menu a { 
+    display: inline-block; 
+    margin-right: 15px; 
+    padding: 10px; 
+    background-color: #f0f0f0; 
+    text-decoration: none; 
+    color: #333; 
+    border-radius: 5px; 
+}
+
+.menu a:hover { 
+    background-color: #ddd; 
+}
+
+/* コンテナスタイル追加 */
+.container {
+    grid-row: 5;
+    grid-column: 1 / 7;
+    padding: 15px;
+    margin: 5px;
+    overflow-y: auto;
+}
+
+/* 録画管理のボタングループ */
+.button-group {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+}
+
+/* カメラリストのグリッド表示 */
+.camera-list {
+    margin-top: 20px;
+}
+
+.camera-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.camera-item {
+    margin-bottom: 0;
+    padding: 15px;
+    background-color: #f0f0f0;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+    transition: all 0.3s ease;
+}
+
+.camera-item:hover {
+    box-shadow: 0 0 8px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.camera-item h3 {
+    margin: 0 0 10px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #ddd;
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+.camera-item p {
+    margin: 5px 0;
+}

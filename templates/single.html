@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1, minimum-scale=1, shrink-to-fit=no, user-scalable=no">
+    <meta http-equiv="refresh" content="180">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.18/hls.js"></script>
+    <title>監視カメラシステム</title>
+</head>
+<body class="single-view">
+    <div class="layout">
+        <header><h1>監視カメラシステム</h1></header>
+        <nav>
+        </nav>
+        <div class="container">
+            <div class="camera">
+                <div class="camera-header">
+                    <h4>{{ camera.name or 'カメラ' ~ camera.id }}</h4>
+                </div>
+                <div class="video-container">
+                    <video id="video{{ camera.id }}" autoplay playsinline muted></video>
+                    <div class="stream-status" id="status-main">接続中...</div>
+                    <div class="loading-spinner" id="spinner-main"></div>
+                    <div class="error-overlay" id="error-main">エラーが発生しました<br>再読込してください</div>
+                </div>
+            </div>
+        </div>
+        <footer>&nbsp;&nbsp;Copyright&copy;&nbsp;&nbsp;2024&nbsp;&nbsp;株式会社&nbsp;共立電機製作所&nbsp;&nbsp;All&nbsp;rights&nbsp;reserved.</footer>
+    </div>
+
+    <script>
+        window.HLS_URL = "{{ hls_url }}";
+        window.CAMERA_ID = "{{ camera.id }}";
+    </script>
+
+    <script src="/static/js/single.js"></script>
+</body>
+</html>

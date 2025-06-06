@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1, minimum-scale=1, shrink-to-fit=no, user-scalable=no">
+    <link rel="stylesheet" href="/static/css/style_record.css">
+    <title>監視カメラシステム</title>
+</head>
+<body>
+    <div class="layout-record">
+        <header><h1>監視カメラシステム</h1></header>
+        <nav>
+            <ul>
+                <li><a href="/system/cam/">Top</a></li>
+                <li><a href="/system/cam/record/">録画データ</a></li>
+                <li><a href="/system/cam/backup/">バックアップ録画一覧</a></li>
+            </ul>
+        </nav>
+        
+        <!-- フィルタリングコントロール追加 -->
+        <div class="filter-controls">
+            <input type="text" id="search-input" placeholder="ファイル名で検索..." class="search-box">
+            <select id="camera-filter" class="filter-select">
+                <option value="all">すべてのカメラ</option>
+                {% for camera_id, files in recordings.items() %}
+                    <option value="{{ camera_id }}">{{ camera_names.get(camera_id, 'カメラ ' + camera_id) }}</option>
+                {% endfor %}
+            </select>
+            <button id="refresh-btn" class="refresh-button">更新</button>
+        </div>
+        
+        <div class="recordings-flex">
+            {% if not recordings %}
+                <div class="no-recordings-message">録画ファイルが見つかりません</div>
+            {% endif %}
+            
+            {% for camera_id, files in recordings.items() %}
+                <div class="camera-section" data-camera-id="{{ camera_id }}">
+                    <div class="camera-info">
+                        <div class="camera-id">項番：{{ camera_id }}</div>
+                        {% if camera_names and camera_id in camera_names %}
+                            <div class="camera-name">場所：{{ camera_names[camera_id] }}</div>
+                        {% endif %}
+                        <div class="file-count">{{ files|length }}ファイル</div>
+                    </div>
+                    
+                    {% if files %}
+                        <table class="recordings-table">
+                            <thead>
+                                <tr>
+                                    <th>ファイル名</th>
+                                    <th>録画日時</th>
+                                    <th>サイズ</th>
+                                    <th>アクション</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for file in files %}
+                                    <tr class="recording-item" data-filename="{{ file }}">
+                                        <td class="filename-cell">{{ file }}</td>
+                                        <td class="date-cell">
+                                            {% set date_str = file.split('_')[1]|default('') %}
+                                            {% if date_str and date_str|length >= 14 %}
+                                                {{ date_str[0:4] }}-{{ date_str[4:6] }}-{{ date_str[6:8] }} {{ date_str[8:10] }}:{{ date_str[10:12] }}:{{ date_str[12:14] }}
+                                            {% else %}
+                                                不明
+                                            {% endif %}
+                                        </td>
+                                        <td class="size-cell file-size" data-path="/system/cam/record/{{ camera_id }}/{{ file }}">取得中...</td>
+                                        <td class="action-cell">
+                                            <a href="/system/cam/record/{{ camera_id }}/{{ file }}" 
+                                                class="play-btn" 
+                                                target="_blank" 
+                                                title="新しいウィンドウで再生">再生</a>
+                                            <button class="download-btn" 
+                                                data-path="/system/cam/record/{{ camera_id }}/{{ file }}" 
+                                                title="ダウンロード">保存</button>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <div class="no-files-message">このカメラの録画ファイルはありません</div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        <footer>&nbsp;&nbsp;Copyright&copy;&nbsp;&nbsp;2024&nbsp;&nbsp;株式会社&nbsp;共立電機製作所&nbsp;&nbsp;All&nbsp;rights&nbsp;reserved.</footer>
+    </div>
+    
+    <script src="/static/js/recordings.js"></script>
+</body>
+</html>

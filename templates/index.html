@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1, minimum-scale=1, shrink-to-fit=no, user-scalable=no">
+    <meta http-equiv="refresh" content="180">
+    <!-- キャッシュ制御の強化 -->
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="stylesheet" href="/static/css/style.css?v={{ timestamp }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.18/hls.js"></script>
+    <title>監視カメラシステム</title>
+</head>
+<body>
+    <div class="layout">
+        <header><h1>監視カメラシステム</h1></header>
+        <nav>
+        </nav>
+        <div class="container">
+            <div id="camera-grid" class="grid">
+                <!-- カメラはJavaScriptで動的に追加されます -->
+            </div>
+        </div>
+        <footer>&nbsp;&nbsp;Copyright&copy;&nbsp;&nbsp;2024&nbsp;&nbsp;株式会社&nbsp;共立電機製作所&nbsp;&nbsp;All&nbsp;rights&nbsp;reserved.</footer>
+    </div>
+
+    <!-- カメラデータをデータ属性として埋め込み -->
+    <script id="camera-data" type="application/json">
+        {{ cameras|tojson }}
+    </script>
+
+    <!-- タイムスタンプをJavaScriptに渡す -->
+    <script>
+        const pageTimestamp = "{{ timestamp }}";
+    </script>
+
+    <script src="/static/js/index.js?v={{ timestamp }}"></script>
+</body>
+</html>
