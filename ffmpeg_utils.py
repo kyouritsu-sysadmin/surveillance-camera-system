@@ -115,77 +115,83 @@ def check_stream_details(rtsp_url, timeout=10):
         logging.error(f"Error checking stream details: {e}")
         return None
 
-def kill_ffmpeg_processes(camera_id=None, pid=None):
+def kill_ffmpeg_processes(camera_id=None, pid=None, process_type=None):
     """
     実行中のFFmpegプロセスを強制終了する。
     camera_idまたはpidを指定すると特定のプロセスのみ終了。
+    process_type（'recording'または'hls'）で用途別に限定終了。
     両方指定されていない場合はすべてのFFmpegプロセスを終了。
     
     Args:
         camera_id (str, optional): カメラID
         pid (int, optional): プロセスID
-        
+        process_type (str, optional): 'recording'または'hls'で用途限定
     Returns:
         bool: 操作が成功したかどうか
     """
     try:
-        logging.info(f"kill_ffmpeg_processes: camera_id={camera_id}, pid={pid} の停止を開始")
+        logging.info(f"kill_ffmpeg_processes: camera_id={camera_id}, pid={pid}, process_type={process_type} の停止を開始")
 
-        # Windowsの場合はtaskkillコマンドを使用
+        # Windowsの場合
         if os.name == 'nt':
-            if pid:
-                # 特定のプロセスIDのみ終了
-                subprocess.run(['taskkill', '/F', '/PID', str(pid)], 
-                               stdout=subprocess.DEVNULL, 
-                               stderr=subprocess.DEVNULL)
-                logging.info(f"FFmpegプロセス(PID:{pid})を終了しました")
-                return True
-            
-            # すべてのFFmpegプロセスを検索して終了
-            logging.info("taskkillを使用して全てのFFmpegプロセスを終了します")
-            try:
-                if camera_id:
-                    # camera_idに対応するプロセスを探して終了（未実装なので一旦すべて終了）
-                    subprocess.run(['taskkill', '/F', '/IM', 'ffmpeg.exe'], 
-                                stdout=subprocess.DEVNULL, 
-                                stderr=subprocess.DEVNULL)
-                else:
-                    # すべてのffmpegプロセスを終了
-                    subprocess.run(['taskkill', '/F', '/IM', 'ffmpeg.exe'], 
-                                stdout=subprocess.DEVNULL, 
-                                stderr=subprocess.DEVNULL)
-            except subprocess.CalledProcessError:
-                # プロセスが見つからなかった場合などは無視
-                pass
+            import psutil
+            target_pids = []
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    if proc.info['name'] and 'ffmpeg' in proc.info['name'].lower():
+                        # camera_id/pid/process_typeでフィルタ
+                        if pid and proc.info['pid'] != pid:
+                            continue
+                        if camera_id and camera_id not in ' '.join(proc.info.get('cmdline', [])):
+                            continue
+                        if process_type:
+                            cmdline = ' '.join(proc.info.get('cmdline', []))
+                            if process_type == 'recording' and ('m3u8' in cmdline or '-f hls' in cmdline):
+                                continue  # HLS用は除外
+                            if process_type == 'hls' and ('.mp4' in cmdline or '-f mp4' in cmdline):
+                                continue  # 録画用は除外
+                        target_pids.append(proc.info['pid'])
+                except Exception:
+                    continue
+            # 対象PIDをkill
+            for tpid in target_pids:
+                try:
+                    subprocess.run(['taskkill', '/F', '/PID', str(tpid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    logging.info(f"FFmpegプロセス(PID:{tpid})を用途別に終了しました")
+                except Exception as e:
+                    logging.warning(f"FFmpegプロセス(PID:{tpid})の終了に失敗: {e}")
+            if not target_pids:
+                logging.info("該当するFFmpegプロセスはありませんでした")
+            return True
         else:
-            # Linuxなどの場合はpsとkillコマンドを使用
-            processes = []
-            if pid:
-                # 特定のプロセスIDのみ
-                processes.append(pid)
-            else:
-                # すべてのFFmpegプロセスを検索
+            # Linux等
+            import psutil
+            target_pids = []
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
                 try:
-                    ps_output = subprocess.check_output(['ps', 'aux'], text=True)
-                    for line in ps_output.splitlines():
-                        if 'ffmpeg' in line and (not camera_id or camera_id in line):
-                            parts = line.split()
-                            if len(parts) > 1:
-                                processes.append(parts[1])  # PID
-                except subprocess.CalledProcessError:
-                    pass
-            
-            # 見つかったプロセスを終了
-            for proc_pid in processes:
+                    if proc.info['name'] and 'ffmpeg' in proc.info['name'].lower():
+                        if pid and proc.info['pid'] != pid:
+                            continue
+                        if camera_id and camera_id not in ' '.join(proc.info.get('cmdline', [])):
+                            continue
+                        if process_type:
+                            cmdline = ' '.join(proc.info.get('cmdline', []))
+                            if process_type == 'recording' and ('m3u8' in cmdline or '-f hls' in cmdline):
+                                continue
+                            if process_type == 'hls' and ('.mp4' in cmdline or '-f mp4' in cmdline):
+                                continue
+                        target_pids.append(proc.info['pid'])
+                except Exception:
+                    continue
+            for tpid in target_pids:
                 try:
-                    os.kill(int(proc_pid), 9)  # SIGKILL
-                    logging.info(f"FFmpegプロセス(PID:{proc_pid})を終了しました")
-                except (ProcessLookupError, PermissionError) as e:
-                    logging.warning(f"FFmpegプロセス(PID:{proc_pid})の終了に失敗しました: {e}")
-        
-        logging.info("全てのFFmpegプロセスが正常に終了しました")
-        return True
-        
+                    os.kill(int(tpid), 9)
+                    logging.info(f"FFmpegプロセス(PID:{tpid})を用途別に終了しました")
+                except Exception as e:
+                    logging.warning(f"FFmpegプロセス(PID:{tpid})の終了に失敗: {e}")
+            if not target_pids:
+                logging.info("該当するFFmpegプロセスはありませんでした")
+            return True
     except Exception as e:
         logging.error(f"FFmpegプロセス終了中にエラーが発生しました: {e}")
         return False
@@ -297,6 +303,42 @@ def finalize_recording(file_path):
     except Exception as e:
         logging.error(f"Error finalizing recording: {e}")
 
+def wait_for_available_gpu_session(max_sessions=8, check_interval=5, max_wait=60):
+    """
+    nvidia-smiで現在のh264_nvencセッション数を確認し、上限に達している場合は待機する
+    Args:
+        max_sessions (int): 許容する最大セッション数
+        check_interval (int): チェック間隔（秒）
+        max_wait (int): 最大待機時間（秒）
+    Returns:
+        bool: 利用可能になればTrue、タイムアウトならFalse
+    """
+    import time
+    import re
+    start_time = time.time()
+    while True:
+        try:
+            result = subprocess.run([
+                'nvidia-smi',
+                '--query-compute-apps=process_name',
+                '--format=csv,noheader'
+            ], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                # h264_nvencを使っているプロセス数をカウント
+                count = len([line for line in result.stdout.splitlines() if 'ffmpeg' in line])
+                if count < max_sessions:
+                    return True
+                else:
+                    print(f"[GPU監視] h264_nvencセッション数が上限({max_sessions})に達しています。待機中...")
+            else:
+                print(f"[GPU監視] nvidia-smiコマンド失敗: {result.stderr}")
+        except Exception as e:
+            print(f"[GPU監視] nvidia-smi実行エラー: {e}")
+        if time.time() - start_time > max_wait:
+            print(f"[GPU監視] GPUセッション空き待ちタイムアウト({max_wait}秒)")
+            return False
+        time.sleep(check_interval)
+
 def start_ffmpeg_process(cmd, log_path=None, high_priority=False, show_error=True):
     """
     FFmpegプロセスを起動する
@@ -311,6 +353,11 @@ def start_ffmpeg_process(cmd, log_path=None, high_priority=False, show_error=Tru
         subprocess.Popen: 起動したプロセス
     """
     try:
+        # GPUセッション監視を追加
+        if not wait_for_available_gpu_session():
+            logging.error("GPUセッション上限のためFFmpegプロセス起動を中止します")
+            return None
+
         # 開始ログ
         cmd_str = ' '.join(cmd)
         logging.info(f"FFmpeg process starting with command: {cmd_str[:200]}...")
@@ -615,9 +662,45 @@ def terminate_process(process, timeout=10):
         logging.error(f"Unexpected error in terminate_process for PID {pid}: {e}")
         logging.exception("Complete error details:")
 
+def get_stream_fps_and_resolution(rtsp_url, timeout=5):
+    """
+    ffprobeでFPSと解像度を取得
+    Returns: (fps, width, height) or (None, None, None)
+    """
+    try:
+        import subprocess
+        cmd = [
+            'ffprobe',
+            '-v', 'error',
+            '-rtsp_transport', 'tcp',
+            '-select_streams', 'v:0',
+            '-show_entries', 'stream=r_frame_rate,width,height',
+            '-of', 'csv=p=0:s=,',
+            '-timeout', str(timeout * 1000000),
+            '-i', rtsp_url
+        ]
+        result = subprocess.run(cmd, timeout=timeout, capture_output=True, text=True)
+        if result.returncode == 0 and result.stdout.strip():
+            values = result.stdout.strip().split(',')
+            if len(values) == 3:
+                fps_str, width_str, height_str = values
+                try:
+                    fps = float(fractions.Fraction(fps_str))
+                except Exception:
+                    fps = 15
+                try:
+                    width = int(float(width_str))
+                    height = int(float(height_str))
+                except Exception:
+                    width, height = 1280, 720
+                return fps, width, height
+        return None, None, None
+    except Exception:
+        return None, None, None
+
 def get_hls_streaming_command(input_url, output_path, segment_time=1, buffer_size="32768k"):
     """
-    HLSストリーミング用のFFmpegコマンドを生成する - FFmpeg 7.1.1対応・時間軸同期
+    HLSストリーミング用のFFmpegコマンドを生成する（NVIDIA CUDA対応・長時間安定運用向け）
     
     Args:
         input_url (str): 入力URLまたはファイルパス
@@ -632,8 +715,22 @@ def get_hls_streaming_command(input_url, output_path, segment_time=1, buffer_siz
     output_dir = os.path.dirname(output_path)
     # ファイル名部分（拡張子なし）を取得
     filename = os.path.splitext(os.path.basename(output_path))[0]
-    
-    # 最小限の必須パラメータでコマンドを生成（安定性重視）
+
+    # CUDA（NVIDIA GPU）エンコード用パラメータ
+    # -c:v h264_nvenc: GPUエンコード
+    # -preset fast: CUDA用推奨（veryfastは未対応）
+    # -rc:v vbr: 可変ビットレートで安定性向上
+    # -b:v, -maxrate, -bufsize: 長時間運用時のビットレート制御
+    # -hls_flags delete_segments+independent_segments+split_by_time: セグメント肥大化防止
+    # -hls_list_size: プレイリスト肥大化防止
+    # -hls_segment_filename: セグメント名明示
+    # -fflags +genpts+discardcorrupt+igndts+ignidx+flush_packets: 破損フレーム等の自動破棄
+    # -err_detect ignore_err: エラー時も継続
+    # -avoid_negative_ts make_zero: タイムスタンプ異常対策
+    # -use_wallclock_as_timestamps 1: 長時間運用時の時刻同期
+    # -thread_queue_size 512: 入力バッファ拡大
+    # -max_muxing_queue_size 4096: 出力バッファ拡大
+    # -y: 上書き
     return [
         config.FFMPEG_PATH,
         '-rtsp_transport', 'tcp',
@@ -648,15 +745,17 @@ def get_hls_streaming_command(input_url, output_path, segment_time=1, buffer_siz
         '-thread_queue_size', '512',
         '-flags', '+global_header',
         '-i', input_url,
-        '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-tune', 'zerolatency',
+        '-c:v', 'h264_nvenc',
+        '-preset', 'fast',  # CUDA用推奨
+        '-rc:v', 'vbr',     # 可変ビットレート
+        '-b:v', '4000k',    # 平均ビットレート（適宜調整）
+        '-maxrate', '5000k',# 最大ビットレート
+        '-bufsize', '8000k',# バッファサイズ
         '-c:a', 'aac',
         '-b:a', '128k',
         '-ar', '44100',
         '-ac', '2',
         '-async', '1',
-        '-vsync', 'cfr',
         '-fps_mode', 'cfr',
         '-force_key_frames', f'expr:gte(t,n_forced*{segment_time})',
         '-sc_threshold', '0',

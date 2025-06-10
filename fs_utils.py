@@ -36,16 +36,7 @@ def ensure_directory_exists(path):
         logging.error(f"Path exists but is not a directory: {path}")
         raise ValueError(f"Path exists but is not a directory: {path}")
     
-    # ディレクトリの書き込み権限をチェック
-    try:
-        test_file_path = os.path.join(path, "_test_write_permission.tmp")
-        with open(test_file_path, 'w') as f:
-            f.write('test')
-        os.remove(test_file_path)
-        logging.debug(f"Verified write permissions for directory: {path}")
-    except Exception as e:
-        logging.error(f"Directory {path} does not have write permissions: {e}")
-        raise
+    # ディレクトリの書き込み権限テストは廃止
 
 def get_free_space(path):
     """

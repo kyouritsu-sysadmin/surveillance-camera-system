@@ -32,7 +32,7 @@ FFMPEG_THREAD_QUEUE_SIZE = int(os.getenv('FFMPEG_THREAD_QUEUE_SIZE', '1024'))  #
 
 # HLSストリーミング設定
 HLS_SEGMENT_DURATION = int(os.getenv('HLS_SEGMENT_DURATION', '1'))  # セグメント長（秒）
-HLS_PLAYLIST_SIZE = int(os.getenv('HLS_PLAYLIST_SIZE', '12'))  # プレイリストに保持するセグメント数を調整
+HLS_PLAYLIST_SIZE = 48  # プレイリストに保持するセグメント数を調整
 
 # 録画設定
 MAX_RECORDING_MINUTES = int(os.getenv('MAX_RECORDING_MINUTES', '60'))  # 最大録画時間（分）- デフォルトを60分に変更

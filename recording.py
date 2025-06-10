@@ -541,7 +541,7 @@ def start_all_recordings():
         # さらに残っているプロセスがあればFFmpegプロセスを直接キル
         if recording_processes:
             logging.warning("録画プロセスが残っています。FFmpegプロセスを直接強制終了します")
-            ffmpeg_utils.kill_ffmpeg_processes()
+            ffmpeg_utils.kill_ffmpeg_processes(process_type='recording')
             recording_processes.clear()
             recording_start_times.clear()
             time.sleep(2)
@@ -726,7 +726,7 @@ def stop_all_recordings():
                     logging.error(f"カメラ {camera_id} のプロセスクリーンアップエラー: {proc_err}")
             
             # すべてのFFmpegプロセスを強制終了
-            ffmpeg_utils.kill_ffmpeg_processes()
+            ffmpeg_utils.kill_ffmpeg_processes(process_type='recording')
             time.sleep(1)  # 終了を待機
             
             # recording_processesを完全にクリア

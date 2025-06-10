@@ -242,20 +242,20 @@ def initialize_app():
     fs_utils.ensure_directory_exists(config.BACKUP_PATH)
     
     # tmp以下のm3u8とtsファイルをクリア
-    logging.info("一時ファイルをクリア中...")
-    try:
-        if os.path.exists(config.TMP_PATH):
-            for camera_dir in os.listdir(config.TMP_PATH):
-                camera_path = os.path.join(config.TMP_PATH, camera_dir)
-                if os.path.isdir(camera_path):
-                    for f in os.listdir(camera_path):
-                        if f.endswith('.m3u8') or f.endswith('.ts'):
-                            try:
-                                os.remove(os.path.join(camera_path, f))
-                            except Exception as e:
-                                logging.error(f"一時ファイル削除エラー: {e}")
-    except Exception as e:
-        logging.error(f"一時ファイルクリア中にエラー: {e}")
+    # logging.info("一時ファイルをクリア中...")
+    # try:
+    #     if os.path.exists(config.TMP_PATH):
+    #         for camera_dir in os.listdir(config.TMP_PATH):
+    #             camera_path = os.path.join(config.TMP_PATH, camera_dir)
+    #             if os.path.isdir(camera_path):
+    #                 for f in os.listdir(camera_path):
+    #                     if f.endswith('.m3u8') or f.endswith('.ts'):
+    #                         try:
+    #                             os.remove(os.path.join(camera_path, f))
+    #                         except Exception as e:
+    #                             logging.error(f"一時ファイル削除エラー: {e}")
+    # except Exception as e:
+    #     logging.error(f"一時ファイルクリア中にエラー: {e}")
     
     # ストリーミング機能の初期化（自動的にすべてのカメラのストリーミングを開始します）
     logging.info("ストリーミング機能を初期化中...")

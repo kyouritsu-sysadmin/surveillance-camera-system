@@ -95,21 +95,17 @@ def start_streaming_workers():
     ストリーミングワーカースレッドを開始する
     """
     global streaming_workers_running
-    
     if streaming_workers_running:
         return
-    
     streaming_workers_running = True
-    
-    # ワーカースレッドを作成
-    for i in range(3):  # 複数のワーカースレッドを作成
+    # ワーカースレッド数をMAX_CONCURRENT_STREAMSに合わせて動的に生成
+    for i in range(config.MAX_CONCURRENT_STREAMS):
         worker = threading.Thread(
             target=streaming_worker,
             daemon=True,
             name=f"streaming-worker-{i}"
         )
         worker.start()
-    
     # リソース監視スレッドを開始
     resource_monitor = threading.Thread(
         target=monitor_system_resources,
@@ -117,7 +113,6 @@ def start_streaming_workers():
         name="resource-monitor"
     )
     resource_monitor.start()
-    
     # 定期的なクリーンアップスレッドを開始
     cleanup_thread = threading.Thread(
         target=cleanup_scheduler,
@@ -125,7 +120,6 @@ def start_streaming_workers():
         name="cleanup-scheduler"
     )
     cleanup_thread.start()
-    
     # 全体的な健全性監視スレッドを開始
     health_monitor = threading.Thread(
         target=global_health_monitor,
@@ -133,7 +127,6 @@ def start_streaming_workers():
         name="health-monitor"
     )
     health_monitor.start()
-    
     logging.info("Streaming workers and monitors started")
 
 def streaming_worker():
@@ -144,55 +137,40 @@ def streaming_worker():
     
     while True:
         try:
-            # キューからカメラ情報を取得
             camera = streaming_queue.get(timeout=1)
-            
-            # 既にストリーミング中ならスキップ
             if camera['id'] in streaming_processes:
                 streaming_queue.task_done()
                 continue
-            
-            # リソース使用状況をチェック
             cpu_usage = system_resources['cpu']
             mem_usage = system_resources['memory']
-            
             with streaming_lock:
                 current_streams = active_streams_count
-            
-            # リソース制限チェック
             if current_streams >= config.MAX_CONCURRENT_STREAMS:
                 logging.warning(f"Maximum concurrent streams limit reached ({current_streams}/{config.MAX_CONCURRENT_STREAMS}). Delaying stream for camera {camera['id']}")
-                # キューに戻して後で再試行
                 streaming_queue.put(camera)
                 streaming_queue.task_done()
                 time.sleep(5)
                 continue
-            
             if cpu_usage > config.MAX_CPU_PERCENT or mem_usage > config.MAX_MEM_PERCENT:
                 logging.warning(f"System resources critical: CPU {cpu_usage}%, Memory {mem_usage}%. Delaying stream for camera {camera['id']}")
-                # キューに戻して後で再試行
                 streaming_queue.put(camera)
                 streaming_queue.task_done()
                 time.sleep(10)
                 continue
-            
-            # ストリーミングを開始
+            # プロセス起動前にディレイを追加
+            time.sleep(1)
             success = start_streaming_process(camera)
-            
-            if success:
-                with streaming_lock:
+            with streaming_lock:
+                if success:
                     active_streams_count += 1
-                logging.info(f"Successfully started streaming for camera {camera['id']}. Active streams: {active_streams_count}")
-            else:
-                logging.error(f"Failed to start streaming for camera {camera['id']}")
-                # 少し待ってから再試行
-                time.sleep(5)
+                    logging.info(f"Successfully started streaming for camera {camera['id']}. Active streams: {active_streams_count}")
+                else:
+                    logging.error(f"Failed to start streaming for camera {camera['id']}")
+            if not success:
+                time.sleep(10)
                 streaming_queue.put(camera)
-            
             streaming_queue.task_done()
-            
         except queue.Empty:
-            # キューが空の場合は待機
             time.sleep(0.5)
         except Exception as e:
             logging.error(f"Error in streaming worker: {e}")
@@ -221,7 +199,7 @@ def start_streaming_process(camera):
         hls_path = os.path.join(camera_tmp_dir, f"{camera['id']}.m3u8").replace('/', '\\')
 
         # カメラ固有のプロセスのみ終了（より高速な起動のため）
-        ffmpeg_utils.kill_ffmpeg_processes(camera_id=camera['id'])
+        ffmpeg_utils.kill_ffmpeg_processes(camera_id=camera['id'], process_type='hls')
         time.sleep(0.5)  # プロセス終了を待つ時間を増加
 
         # カメラIDディレクトリが存在しない場合のみ作成
@@ -324,9 +302,9 @@ def start_streaming_process(camera):
         # 再起動カウンターの初期化/リセット
         restart_counts[camera['id']] = 0
 
-        # m3u8ファイルの生成を待機（タイムアウト短縮）
+        # m3u8ファイルの生成を待機（タイムアウト延長）
         m3u8_created = False
-        max_wait_time = 8  # 最大待機時間を短縮（秒）
+        max_wait_time = 30  # 最大待機時間を30秒に延長
         start_wait_time = time.time()
         wait_interval = 0.1  # 確認間隔をさらに短く
         
@@ -338,16 +316,17 @@ def start_streaming_process(camera):
                 error_output = ""
                 try:
                     if process.stderr:
+                        # stderr全量を読み込む
                         error_output = process.stderr.read().decode('utf-8', errors='replace')
                     if not error_output and os.path.exists(log_path):
-                        with open(log_path, 'r') as f:
+                        with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
                             error_output = f.read()
                 except Exception as err:
                     logging.error(f"エラー出力の読み取りに失敗: {err}")
                     error_output = "エラー出力の取得に失敗しました"
                 
                 logging.error(f"m3u8待機中にFFmpegプロセスが終了しました。終了コード: {return_code}")
-                logging.error(f"FFmpegエラー出力: {error_output[:500]}...")
+                logging.error(f"FFmpegエラー出力: {error_output}")
                 if camera['id'] in streaming_processes:
                     del streaming_processes[camera['id']]
                 return False
@@ -832,11 +811,8 @@ def cleanup_old_segments(camera_id, force=False):
             if ts_file not in active_segments:
                 try:
                     ts_file_path = os.path.join(camera_tmp_dir, ts_file)
-                    
-                    # 新しいTSファイル形式に対応（%Y%m%d%H%M%S-%d.ts）
-                    # 1分以上経過したファイルのみ削除するように時間チェックを追加
-                    file_mtime = os.path.getmtime(ts_file_path)
-                    if time.time() - file_mtime > 60:  # 1分以上前のファイル
+                    file_mtime = os.path.getmtime(ts_file_path)  # ← 追加
+                    if time.time() - file_mtime > 180:  # 3分以上前のファイル
                         os.remove(ts_file_path)
                         deleted_count += 1
                 except Exception as del_err:
