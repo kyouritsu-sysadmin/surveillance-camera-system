@@ -158,7 +158,7 @@ def restart_stream(camera_id):
         # 現在のストリーミングプロセスを停止
         if camera_id in streaming.streaming_processes:
             logging.info(f"カメラID {camera_id} の既存ストリームを停止します")
-            streaming.stop_streaming(camera_id)
+            streaming.terminate_streaming(camera_id)
             time.sleep(1)  # 処理完了を待機
         
         # 新しいストリーミングプロセスを開始

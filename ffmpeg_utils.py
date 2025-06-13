@@ -698,41 +698,35 @@ def get_stream_fps_and_resolution(rtsp_url, timeout=5):
     except Exception:
         return None, None, None
 
-def get_hls_streaming_command(input_url, output_path, segment_time=1, buffer_size="32768k"):
+def get_hls_streaming_command(input_url, output_path, segment_time=2, buffer_size="32768k"):
     """
-    HLSストリーミング用のFFmpegコマンドを生成する（NVIDIA CUDA対応・長時間安定運用向け）
-    
+    HLSストリーミング用のFFmpegコマンドを生成する（全カメラ共通・安定運用向け）
+    - NVIDIA GPUが使えない場合は自動でlibx264にフォールバック
     Args:
         input_url (str): 入力URLまたはファイルパス
         output_path (str): 出力パス
         segment_time (int): セグメント長（秒）
         buffer_size (str): バッファサイズ（デフォルト: "32768k"）
-        
     Returns:
         list: FFmpegコマンドのリスト
     """
-    # 出力ディレクトリのパスを取得
+    import shutil
     output_dir = os.path.dirname(output_path)
-    # ファイル名部分（拡張子なし）を取得
     filename = os.path.splitext(os.path.basename(output_path))[0]
 
-    # CUDA（NVIDIA GPU）エンコード用パラメータ
-    # -c:v h264_nvenc: GPUエンコード
-    # -preset fast: CUDA用推奨（veryfastは未対応）
-    # -rc:v vbr: 可変ビットレートで安定性向上
-    # -b:v, -maxrate, -bufsize: 長時間運用時のビットレート制御
-    # -hls_flags delete_segments+independent_segments+split_by_time: セグメント肥大化防止
-    # -hls_list_size: プレイリスト肥大化防止
-    # -hls_segment_filename: セグメント名明示
-    # -fflags +genpts+discardcorrupt+igndts+ignidx+flush_packets: 破損フレーム等の自動破棄
-    # -err_detect ignore_err: エラー時も継続
-    # -avoid_negative_ts make_zero: タイムスタンプ異常対策
-    # -use_wallclock_as_timestamps 1: 長時間運用時の時刻同期
-    # -thread_queue_size 512: 入力バッファ拡大
-    # -max_muxing_queue_size 4096: 出力バッファ拡大
-    # -y: 上書き
+    # GPUエンコーダが使えるか判定
+    ffmpeg_path = config.FFMPEG_PATH
+    nvenc_available = shutil.which(ffmpeg_path) is not None and shutil.which("nvidia-smi") is not None
+    vcodec = 'h264_nvenc' if nvenc_available else 'libx264'
+    vcodec_args = ['-c:v', vcodec]
+    if vcodec == 'h264_nvenc':
+        vcodec_args += ['-preset', 'fast', '-rc:v', 'vbr', '-b:v', '4000k', '-maxrate', '5000k', '-bufsize', '8000k']
+    else:
+        vcodec_args += ['-preset', 'veryfast', '-b:v', '4000k', '-maxrate', '5000k', '-bufsize', '8000k']
+
     return [
-        config.FFMPEG_PATH,
+        ffmpeg_path,
+        '-loglevel', 'debug',
         '-rtsp_transport', 'tcp',
         '-buffer_size', buffer_size,
         '-max_delay', '100000',
@@ -745,17 +739,8 @@ def get_hls_streaming_command(input_url, output_path, segment_time=1, buffer_siz
         '-thread_queue_size', '512',
         '-flags', '+global_header',
         '-i', input_url,
-        '-c:v', 'h264_nvenc',
-        '-preset', 'fast',  # CUDA用推奨
-        '-rc:v', 'vbr',     # 可変ビットレート
-        '-b:v', '4000k',    # 平均ビットレート（適宜調整）
-        '-maxrate', '5000k',# 最大ビットレート
-        '-bufsize', '8000k',# バッファサイズ
-        '-c:a', 'aac',
-        '-b:a', '128k',
-        '-ar', '44100',
-        '-ac', '2',
-        '-async', '1',
+        *vcodec_args,
+        '-an',  # 音声なし
         '-fps_mode', 'cfr',
         '-force_key_frames', f'expr:gte(t,n_forced*{segment_time})',
         '-sc_threshold', '0',
@@ -763,7 +748,7 @@ def get_hls_streaming_command(input_url, output_path, segment_time=1, buffer_siz
         '-movflags', 'empty_moov+omit_tfhd_offset+frag_keyframe+default_base_moof',
         '-hls_time', str(segment_time),
         '-hls_list_size', str(config.HLS_PLAYLIST_SIZE),
-        '-hls_flags', 'delete_segments+independent_segments+split_by_time',
+        '-hls_flags', 'delete_segments+independent_segments',
         '-hls_segment_type', 'mpegts',
         '-hls_segment_filename', os.path.join(output_dir, f"{filename}-%05d.ts"),
         '-hls_start_number_source', 'datetime',

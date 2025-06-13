@@ -24,7 +24,7 @@ def admin_page():
     try:
         logging.info(f"管理者ページ表示処理開始")
         # HTMLをシンプルにレンダリング（データはJavaScriptで取得）
-        return render_template('admin.html')
+        return render_template('admin.html', max_recording_minutes=config.MAX_RECORDING_MINUTES)
     except Exception as e:
         logging.error(f"管理画面表示エラー: {e}", exc_info=True)
         error_html = f"""

@@ -34,9 +34,9 @@ streaming_workers_running = False
 # リソース使用状況
 system_resources = {'cpu': 0, 'memory': 0}
 # 健全性チェックの間隔（秒）
-HEALTH_CHECK_INTERVAL = 10  # 監視強化のため短縮
+HEALTH_CHECK_INTERVAL = 15  # 監視強化のため短縮→やや緩和
 # ファイル更新タイムアウト（秒）- この時間以上更新がない場合は問題と判断
-HLS_UPDATE_TIMEOUT = 10  # 安定性のため延長
+HLS_UPDATE_TIMEOUT = 20  # 安定性のため延長
 # ストリーミング再起動回数を記録
 restart_counts = {}
 # ストリーミング再起動の最大回数（これを超えるとより長い時間待機する）
@@ -44,11 +44,11 @@ MAX_RESTART_COUNT = 5
 # ストリーミング再起動後の待機時間（秒）
 RESTART_COOLDOWN = 30
 # ストリーミング更新チェックの間隔（秒）
-STREAMING_CHECK_INTERVAL = 3.0  # 安定性向上のため延長
+STREAMING_CHECK_INTERVAL = 5.0  # 安定性向上のため延長
 # 新しいTSファイル形式に対応するための変数
 MAX_NO_UPDATE_COUNT = 5  # 増加
 # ファイル更新待機最大時間（秒）
-MAX_UPDATE_WAIT_TIME = 10.0  # 延長
+MAX_UPDATE_WAIT_TIME = 20.0  # 延長
 # TSファイル生成タイムアウト（秒）
 TS_CREATION_TIMEOUT = 10.0  # 延長
 # HLSファイル生成タイムアウト（秒）
@@ -59,6 +59,10 @@ MAX_CONSECUTIVE_NO_UPDATES = 3  # 増加
 RTSP_CONNECTION_TIMEOUT = 15  # 延長
 # カメラプロセスの辞書
 camera_processes = {}
+
+# --- ウォッチドッグ用グローバル ---
+monitor_threads = {}  # camera_id: thread
+watchdog_interval = 30  # 秒
 
 def get_or_start_streaming(camera):
     """
@@ -367,21 +371,13 @@ def start_streaming_process(camera):
         
         # 監視スレッドを開始
         monitor_thread = threading.Thread(
-            target=monitor_streaming_process,
-            args=(camera['id'], process),
-            daemon=True,
-            name=f"monitor-stream-{camera['id']}"
-        )
-        monitor_thread.start()
-
-        # ファイル更新監視スレッドを開始
-        hls_monitor_thread = threading.Thread(
             target=monitor_hls_updates,
             args=(camera['id'],),
             daemon=True,
             name=f"hls-monitor-{camera['id']}"
         )
-        hls_monitor_thread.start()
+        monitor_threads[camera['id']] = monitor_thread
+        monitor_thread.start()
 
         logging.info(f"カメラ {camera['id']} のストリーミングプロセスを正常に開始しました")
         return True
@@ -621,31 +617,29 @@ def monitor_hls_updates(camera_id):
                                 # 更新なしのカウント
                                 consecutive_no_updates += 1
                                 
-                                # 3秒以上更新がない場合は即座にリセット
-                                if current_time - last_update_time > MAX_UPDATE_WAIT_TIME:
-                                    logging.warning(f"カメラ {camera_id} で問題を検出: TSファイルが {round(current_time - last_update_time, 1)}秒間更新されていません")
+                                # 2回連続で未更新かつMAX_UPDATE_WAIT_TIME超過で再起動
+                                if consecutive_no_updates >= 2 and current_time - last_update_time > MAX_UPDATE_WAIT_TIME:
+                                    logging.warning(f"カメラ {camera_id} で問題を検出: TSファイルが {round(current_time - last_update_time, 1)}秒間更新されていません（2回連続未更新）")
                                     logging.warning(f"カメラ {camera_id} の問題が検出されたため、ストリームを即座に再起動します")
                                     restart_camera_stream(camera_id)
                                     return  # 再起動したので監視スレッドを終了
                         else:
                             # TSファイルがない場合も問題とみなす
                             if current_time - last_update_time > MAX_UPDATE_WAIT_TIME:
-                                logging.warning(f"カメラ {camera_id} で問題を検出: TSファイルが存在しません")
-                                logging.warning(f"カメラ {camera_id} の問題が検出されたため、ストリームを即座に再起動します")
-                                restart_camera_stream(camera_id)
-                                return  # 再起動したので監視スレッドを終了
-                            
+                                consecutive_no_updates += 1
+                                if consecutive_no_updates >= 2:
+                                    logging.warning(f"カメラ {camera_id} で問題を検出: TSファイルが存在しません（2回連続未更新）")
+                                    logging.warning(f"カメラ {camera_id} の問題が検出されたため、ストリームを即座に再起動します")
+                                    restart_camera_stream(camera_id)
+                                    return  # 再起動したので監視スレッドを終了
                 # スリープして負荷軽減
                 time.sleep(0.5)
-                
             except Exception as e:
-                logging.error(f"カメラ {camera_id} の監視中にエラーが発生: {str(e)}")
-                # 例外が発生しても監視を続行
+                logging.error(f"カメラ {camera_id} の監視中にエラーが発生: {str(e)}\n{traceback.format_exc()}")
                 time.sleep(1)
-        
         logging.info(f"カメラ {camera_id} のHLS監視スレッドを終了します")
     except Exception as e:
-        logging.error(f"カメラ {camera_id} のHLS監視スレッドでエラーが発生: {str(e)}")
+        logging.error(f"カメラ {camera_id} のHLS監視スレッドでエラーが発生: {str(e)}\n{traceback.format_exc()}")
 
 def restart_camera_stream(camera_id):
     """
@@ -1081,6 +1075,10 @@ def initialize_streaming():
     # ストリーミングワーカースレッドを開始
     start_streaming_workers()
     
+    # ウォッチドッグ・ダンプスレッド起動
+    threading.Thread(target=watchdog_monitor_threads, daemon=True, name="watchdog-monitor").start()
+    threading.Thread(target=dump_monitor_status, daemon=True, name="monitor-dump").start()
+    
     # 少し待機してからすべてのカメラのストリーミングを開始
     time.sleep(2)
     
@@ -1221,7 +1219,7 @@ def start_hls_streaming(camera_id):
         command = ffmpeg_utils.get_hls_streaming_command(
             rtsp_url,
             m3u8_path,
-            segment_time=config.HLS_SEGMENT_DURATION
+            segment_time=getattr(config, 'HLS_SEGMENT_DURATION', 2)
         )
         
         # FFmpegプロセスを起動
@@ -1282,6 +1280,7 @@ def start_hls_streaming(camera_id):
             daemon=True,
             name=f"hls-monitor-{camera_id}"
         )
+        monitor_threads[camera_id] = monitor_thread
         monitor_thread.start()
         
         logging.info(f"カメラ {camera_id} のHLSストリーミングを開始しました（PID: {process.pid}）")
@@ -1370,7 +1369,7 @@ def start_streaming(camera_id, rtsp_url, output_dir):
             logging.warning(f"古いFFmpegプロセスの終了中にエラー: {e}")
 
         # FFmpegコマンドを取得してストリーミング開始
-        cmd = ffmpeg_utils.get_hls_streaming_command(rtsp_url, output_path, segment_time=1)
+        cmd = ffmpeg_utils.get_hls_streaming_command(rtsp_url, output_path, segment_time=getattr(config, 'HLS_SEGMENT_DURATION', 2))
         
         # サブプロセスでFFmpegを起動
         logging.info(f"FFmpeg starting for camera {camera_id} with command: {' '.join(cmd)}")
@@ -1403,6 +1402,7 @@ def start_streaming(camera_id, rtsp_url, output_dir):
             args=(process, camera_id, rtsp_url, output_dir),
             daemon=True
         )
+        monitor_threads[camera_id] = thread
         thread.start()
 
         # プロセスが起動したかの初期チェック（即時エラーをキャッチ）
@@ -1509,3 +1509,41 @@ def _process_ffmpeg_output(process, camera_id, rtsp_url, output_dir):
         
     except Exception as e:
         logging.error(f"カメラ {camera_id} のFFmpeg出力処理中に予期しないエラー: {e}")
+
+def watchdog_monitor_threads():
+    """
+    監視スレッドの生存監視（ウォッチドッグ）
+    死亡時は自動再生成
+    """
+    while True:
+        try:
+            for camera_id, thread in list(monitor_threads.items()):
+                if not thread.is_alive():
+                    logging.error(f"ウォッチドッグ: カメラ{camera_id}の監視スレッドが死んでいます。自動再生成します")
+                    t = threading.Thread(target=monitor_hls_updates, args=(camera_id,), daemon=True, name=f"hls-monitor-{camera_id}")
+                    monitor_threads[camera_id] = t
+                    t.start()
+            # streaming_processesの整合性もチェック
+            for camera_id, proc in list(streaming_processes.items()):
+                if camera_id not in monitor_threads:
+                    logging.warning(f"ウォッチドッグ: カメラ{camera_id}の監視スレッドが存在しません。自動生成します")
+                    t = threading.Thread(target=monitor_hls_updates, args=(camera_id,), daemon=True, name=f"hls-monitor-{camera_id}")
+                    monitor_threads[camera_id] = t
+                    t.start()
+            time.sleep(watchdog_interval)
+        except Exception as e:
+            logging.error(f"ウォッチドッグ監視中に例外: {e}\n{traceback.format_exc()}")
+            time.sleep(10)
+
+def dump_monitor_status():
+    while True:
+        try:
+            logging.info("==== [監視スレッド/プロセス状態ダンプ] ====")
+            for camera_id, proc in streaming_processes.items():
+                alive = monitor_threads.get(camera_id).is_alive() if camera_id in monitor_threads else False
+                logging.info(f"カメラ{camera_id}: プロセスPID={getattr(proc, 'pid', None)}, 監視スレッド生存={alive}")
+            logging.info("==== [ダンプここまで] ====")
+            time.sleep(120)
+        except Exception as e:
+            logging.error(f"監視状態ダンプ中に例外: {e}\n{traceback.format_exc()}")
+            time.sleep(30)
